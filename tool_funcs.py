@@ -15,20 +15,20 @@ def pwd():
     except Exception as e:
         return f"Error: {str(e)}"
 
-def cat(file_path):
+def cat(file):
     """Print the contents of a file."""
     try:
-        with open(file_path, 'r') as f:
+        with open(file, 'r') as f:
             return f.read()
     except Exception as e:
         return f"Error: {str(e)}"
-    
-def write_file(file_path, content):
+
+def write_file(file, content):
     """Write content to a file."""
     try:
-        with open(file_path, 'w') as f:
+        with open(file, 'w') as f:
             f.write(content)
-        return f"Successfully wrote to {file_path}"
+        return f"Successfully wrote to {file}"
     except Exception as e:
         return f"Error: {str(e)}"
     

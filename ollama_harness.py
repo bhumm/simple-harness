@@ -34,7 +34,9 @@ def resolve_model(cli_model: Optional[str], config_path: str = "config.json") ->
     if not models:
         print("No models found. Pulling llama3: `ollama pull llama3`.")
         try:
+            # Pull a model for you
             subprocess.run(["ollama", "pull", "llama3"], check=True)
+
         except subprocess.CalledProcessError as e:
             print(f"Failed to pull model: {e}")
             print("Please pull a model and try again.")
@@ -53,14 +55,16 @@ def resolve_model(cli_model: Optional[str], config_path: str = "config.json") ->
 
 def execute_tool(tool_name: str, tool_args: dict) -> str:
     """Given a tool name and arguments, execute the tool and return the result as a string."""
-    for tool in TOOLS:
-        if tool.function.name == tool_name:
-            try:
-                getattr(tool_funcs, tool_name)(**tool_args)
-            except Exception as e:
-                return f"Error executing tool '{tool_name}': {str(e)}"
-            
-    return f"Error: unknown tool '{tool_name}'"
+    func = getattr(tool_funcs, tool_name, None)
+    if func is None:
+        return f"Error: unknown tool '{tool_name}'"
+    
+    try:
+        result = func(**tool_args)
+        return str(result)
+    
+    except Exception as e:
+        return f"Error executing tool '{tool_name}': {str(e)}"
 
 
 # ---------------------------------------------------------------------------
@@ -68,43 +72,29 @@ def execute_tool(tool_name: str, tool_args: dict) -> str:
 # ---------------------------------------------------------------------------
 
 def run_agent_turn(model: str, messages: list) -> str:
-    """
-    Run one agent turn: send messages to the model and handle tool calls.
-    Returns the model's final text response for this turn.
-
-    This is the core agent loop. The model can call tools zero or more times
-    before it gives a final answer — we keep looping until it stops.
-
-    PSEUDOCODE:
-
-    WHILE True:
-
+    """Run a single turn of the agent loop: send messages to the model, execute any tool calls, and return the final response if there are no tool calls."""
+    while True:
         response = ollama.chat(model, messages, tools=TOOLS)
-                                              # ^ pass tools so model knows they exist
 
-        IF response.message.tool_calls is not empty:
-
-            FOR EACH tool_call IN response.message.tool_calls:
+        if response.message.tool_calls is not None:
+            
+            for tool_call in response.message.tool_calls:
                 name   = tool_call.function.name
-                args   = tool_call.function.arguments      # dict the model filled in
+                args   = tool_call.function.arguments
                 result = execute_tool(name, args)
                 print(f"[tool] {name}({args}) -> {result}")
 
                 # Append the tool result to history so the model can read it
                 messages.append({"role": "tool", "content": result})
 
-            # Loop again — model will see the results and decide what to do next
+            if response.message.content is not None:
+                return response.message.content
 
-        ELSE:
-            # No tool calls — model gave its final answer
-            RETURN response.message.content
-    """
-    pass
-
+        else:
+            return response.message.content
 
 def run_chat_loop(model: str) -> None:
     """Interactive chat loop that maintains full message history each turn."""
-
     system_prompt = "You are a helpful assistant. Use tools when they are helpful."
     messages = [{"role": "system", "content": system_prompt}]
 
@@ -127,18 +117,8 @@ def run_chat_loop(model: str) -> None:
 
         messages.append({"role": "user", "content": user_input})
 
-        # TODO: replace the streaming block below with a call to run_agent_turn()
-        #       once you've implemented it. For now the plain streaming loop still works.
-
-        print("Assistant: ", end="", flush=True)
-        full_response = ""
-
-        for chunk in ollama.chat(model=model, messages=messages, stream=True):
-            token = chunk["message"]["content"]
-            print(token, end="", flush=True)
-            full_response += token
-
-        print()
+        full_response = run_agent_turn(model, messages)
+        print(f"Assistant: {full_response}")
 
         messages.append({"role": "assistant", "content": full_response})
 
@@ -158,6 +138,7 @@ if __name__ == "__main__":
         print("No model specified - available models:")
         for m in ollama.list().models:
             print(f"  - {m.model}")
+            
         usr_input =input("Select a model or press q to exit: ")
         if usr_input.lower() in ("q", "quit", "exit"):
             print("Goodbye.")

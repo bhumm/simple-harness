@@ -20,14 +20,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "pwd",
-            "description": "Print the current working directory",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "directory": {
-                    }
-                },
-            }
+            "description": "Print the current working directory"
         }
     },
     {
@@ -72,16 +65,16 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "run_command",
-            "description": "Run a script",
+            "description": "Run a shell command and return its output",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "file": {
+                    "command": {
                         "type": "string",
-                        "description": "The script file to run"
+                        "description": "The shell command to run"
                     }
                 },
-                "required": ["file"]
+                "required": ["command"]
             }
         }
     }
