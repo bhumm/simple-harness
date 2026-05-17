@@ -71,7 +71,7 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "run_script",
+            "name": "run_command",
             "description": "Run a script",
             "parameters": {
                 "type": "object",

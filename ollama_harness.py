@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+import tool_funcs
 from tools import TOOLS
 
 # ---------------------------------------------------------------------------
@@ -16,7 +17,7 @@ from tools import TOOLS
 def resolve_model(cli_model: Optional[str], config_path: str = "config.json") -> Optional[str]:
     """Return the model to use, checking CLI arg → config file → auto-detect."""
 
-    # 1. Explicit CLI argument wins
+    # 1. Explicit CLI takes priority
     if cli_model:
         return cli_model
 
@@ -47,69 +48,23 @@ def resolve_model(cli_model: Optional[str], config_path: str = "config.json") ->
 
 
 # ---------------------------------------------------------------------------
-# Tools (Step 2)
+# Tools
 # ---------------------------------------------------------------------------
 
-# TOOL DEFINITIONS
-# This is a list of dicts that describes each tool to the model.
-# The model reads the "description" fields to decide when and how to call a tool.
-# It fills in the "parameters" based on the user's message.
-#
-# PSEUDOCODE:
-#
-# TOOLS = [
-#     {
-#         "type": "function",
-#         "function": {
-#             "name": "get_current_weather",
-#             "description": "...",        # <-- the model reads this
-#             "parameters": {
-#                 "type": "object",
-#                 "properties": {
-#                     "city": {
-#                         "type": "string",
-#                         "description": "..."
-#                     }
-#                 },
-#                 "required": ["city"]
-#             }
-#         }
-#     }
-# ]
-
-
-# TOOL IMPLEMENTATIONS
-# Plain Python functions — one per tool.
-# These run locally; the model never sees the code, only the output.
-#
-# PSEUDOCODE:
-#
-# def get_current_weather(city: str) -> str:
-#     # stub for now — swap in a real API call later
-#     RETURN f"It is sunny and 72F in {city}"
-
-# TODO: implement your tool functions here
-
-
-# TOOL DISPATCHER
-# Maps tool names (strings) to actual function calls.
-# The model tells you the name and args; this function does the routing.
-#
-# PSEUDOCODE:
-#
-# def execute_tool(tool_name: str, tool_args: dict) -> str:
-#     IF tool_name == "get_current_weather":
-#         RETURN get_current_weather(tool_args["city"])
-#     ELSE:
-#         RETURN f"Error: unknown tool '{tool_name}'"
-
 def execute_tool(tool_name: str, tool_args: dict) -> str:
-    # TODO: add an if/elif branch for each tool you define above
+    """Given a tool name and arguments, execute the tool and return the result as a string."""
+    for tool in TOOLS:
+        if tool.function.name == tool_name:
+            try:
+                getattr(tool_funcs, tool_name)(**tool_args)
+            except Exception as e:
+                return f"Error executing tool '{tool_name}': {str(e)}"
+            
     return f"Error: unknown tool '{tool_name}'"
 
 
 # ---------------------------------------------------------------------------
-# Plain chat loop (Step 1 — no tools yet)
+# Plain chat loop
 # ---------------------------------------------------------------------------
 
 def run_agent_turn(model: str, messages: list) -> str:
@@ -144,7 +99,6 @@ def run_agent_turn(model: str, messages: list) -> str:
             # No tool calls — model gave its final answer
             RETURN response.message.content
     """
-    # TODO: implement the pseudocode above
     pass
 
 
