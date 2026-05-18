@@ -1,6 +1,7 @@
 import argparse
 import json
 import ollama
+import re
 import subprocess
 import sys
 
@@ -9,6 +10,73 @@ from typing import Optional
 
 import tool_funcs
 from tools import TOOLS
+
+
+# ---------------------------------------------------------------------------
+# AGENT.md — always-on context
+# ---------------------------------------------------------------------------
+
+def load_agent_md(path: str = "AGENT.md") -> Optional[str]:
+    """Return the contents of AGENT.md if it exists in the working directory."""
+    p = Path(path)
+    if p.exists():
+        content = p.read_text().strip()
+        print(f"[agent] Loaded {path}")
+        return content
+    return None
+
+
+# ---------------------------------------------------------------------------
+# SKILLS.md — prompt-triggered context
+# ---------------------------------------------------------------------------
+
+def load_skills_md(path: str = "SKILLS.md") -> list[dict]:
+    """Parse SKILLS.md into a list of {name, triggers, content} dicts.
+
+    Expected format:
+        ## Skill Name
+        triggers: keyword1, keyword2, keyword3
+
+        Skill body text...
+    """
+    p = Path(path)
+    if not p.exists():
+        return []
+
+    skills = []
+    current = None
+
+    for line in p.read_text().splitlines():
+        heading = re.match(r"^##\s+(.+)", line)
+        if heading:
+            if current:
+                current["content"] = current["content"].strip()
+                skills.append(current)
+            current = {"name": heading.group(1).strip(), "triggers": [], "content": ""}
+            continue
+
+        if current is None:
+            continue
+
+        trigger_line = re.match(r"^triggers:\s*(.+)", line, re.IGNORECASE)
+        if trigger_line:
+            current["triggers"] = [t.strip().lower() for t in trigger_line.group(1).split(",")]
+        else:
+            current["content"] += line + "\n"
+
+    if current:
+        current["content"] = current["content"].strip()
+        skills.append(current)
+
+    if skills:
+        print(f"[agent] Loaded {len(skills)} skill(s) from {path}")
+    return skills
+
+
+def get_relevant_skills(user_prompt: str, skills: list[dict]) -> list[dict]:
+    """Return skills whose trigger words appear in the user prompt."""
+    words = set(re.findall(r"\w+", user_prompt.lower()))
+    return [s for s in skills if any(t in words for t in s["triggers"])]
 
 # ---------------------------------------------------------------------------
 # Model resolution
@@ -96,6 +164,12 @@ def run_agent_turn(model: str, messages: list) -> str:
 def run_chat_loop(model: str) -> None:
     """Interactive chat loop that maintains full message history each turn."""
     system_prompt = "You are a helpful assistant. Use tools when they are helpful."
+
+    agent_context = load_agent_md()
+    if agent_context:
+        system_prompt += f"\n\n---\n{agent_context}"
+
+    skills = load_skills_md()
     messages = [{"role": "system", "content": system_prompt}]
 
     print(f"\nChat started with model: {model}")
@@ -114,6 +188,12 @@ def run_chat_loop(model: str) -> None:
 
         if not user_input:
             continue
+
+        # Inject any relevant skill context as a system message before the user turn
+        matched = get_relevant_skills(user_input, skills)
+        for skill in matched:
+            print(f"[agent] Injecting skill: {skill['name']}")
+            messages.append({"role": "system", "content": f"[Skill: {skill['name']}]\n{skill['content']}"})
 
         messages.append({"role": "user", "content": user_input})
 

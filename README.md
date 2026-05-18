@@ -20,7 +20,7 @@ pip install ollama
 You also need [Ollama](https://ollama.com). If you don't have at least one model installed, it pulls llama3 on your behalf:
 
 ```bash
-ollama pull llama3.1
+ollama pull llama3
 ```
 
 ## Usage
